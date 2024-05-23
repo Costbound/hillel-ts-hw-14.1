@@ -4,16 +4,25 @@ interface IToDoList {
   addTask(name: string, body: string, isRequireEditConfirm?: boolean): void;
   removeTask(id: TaskId): void;
   editTask(id: TaskId, data: { name: string; body: string }): void;
-  toogleCompleted(id: TaskId): void;
+  toogleCompleted(id: TaskId, isConfirmed?: boolean): void;
   getTasksAmount(): number;
   getNotCompletedAmount(): number;
+}
+interface IToDoListWithSearch extends IToDoList {
   searchTasks(value: string): Task[];
+}
+interface IToDoListWithSort extends IToDoList {
   sortByIsCompleted(isCompletedFirst: boolean): Task[];
   sortByCreationDate(isAscending: boolean): Task[];
 }
 type TaskId = typeof Task.idType;
 
+enum TaskType {
+  default = 'No confirmation required',
+  confirmRequired = 'Confirmation required',
+}
 interface ITask {
+  readonly type: TaskType;
   readonly id: number;
   readonly creationDate: number;
   name: string;
@@ -23,7 +32,7 @@ interface ITask {
 }
 
 class ToDoList implements IToDoList {
-  private _tasks: Task[] = [];
+  protected _tasks: Task[] = [];
 
   get tasks(): Task[] {
     return this._tasks;
@@ -56,10 +65,18 @@ class ToDoList implements IToDoList {
       task.updateEditDate();
     }
   }
-  toogleCompleted(id: TaskId): void {
+  toogleCompleted(id: TaskId, isConfirmed: boolean = false): void {
     const index = this.getTaskIndex(id);
     if (index === -1) {
+      console.log('Task not found');
       return;
+    }
+    if (this._tasks[index].type === TaskType.confirmRequired) {
+      if (isConfirmed) {
+        this._tasks[index].isCompleted = !this._tasks[index].isCompleted;
+      } else {
+        console.log("This task require confirm to change it's status");
+      }
     } else {
       this._tasks[index].isCompleted = !this._tasks[index].isCompleted;
     }
@@ -70,28 +87,14 @@ class ToDoList implements IToDoList {
   getNotCompletedAmount(): number {
     return this._tasks.filter(({ isCompleted }) => !isCompleted).length;
   }
-
-  searchTasks(value: string): Task[] {
-    return this._tasks.filter(({ name, body }) => name.includes(value) || body.includes(value));
-  }
-  sortByIsCompleted(isCompletedFirst?: boolean): Task[] {
-    const completed = this._tasks.filter(({ isCompleted }) => isCompleted);
-    const notCompleted = this._tasks.filter(({ isCompleted }) => !isCompleted);
-    return isCompletedFirst ? [...completed, ...notCompleted] : [...notCompleted, ...completed];
-  }
-  sortByCreationDate(isAscending?: boolean): Task[] {
-    return isAscending
-      ? this._tasks.toSorted((a, b) => a.creationDate - b.creationDate)
-      : this._tasks.toSorted((a, b) => b.creationDate - a.creationDate);
-  }
 }
 class Task implements ITask {
+  readonly type: TaskType;
   private static idGenerator: number = 0;
   public static idType: typeof this.idGenerator;
 
   public readonly id: typeof Task.idType;
   readonly creationDate: number;
-  readonly isRequireEditConfirm: boolean;
 
   private editDate: number | null = null;
 
@@ -103,7 +106,7 @@ class Task implements ITask {
     this.name = name;
     this.body = body;
 
-    this.isRequireEditConfirm = isRequireEditConfirm;
+    this.type = isRequireEditConfirm ? TaskType.confirmRequired : TaskType.default;
     this.creationDate = Date.now();
 
     Task.idGenerator += 1;
@@ -111,5 +114,23 @@ class Task implements ITask {
   }
   updateEditDate(): void {
     this.editDate = Date.now();
+  }
+}
+class ToDoListWithSearch extends ToDoList implements IToDoListWithSearch {
+  searchTasks(value: string): Task[] {
+    return this._tasks.filter(({ name, body }) => name.includes(value) || body.includes(value));
+  }
+}
+
+class ToDoListWithSort extends ToDoList implements IToDoListWithSort {
+  sortByIsCompleted(isCompletedFirst?: boolean): Task[] {
+    const completed = this._tasks.filter(({ isCompleted }) => isCompleted);
+    const notCompleted = this._tasks.filter(({ isCompleted }) => !isCompleted);
+    return isCompletedFirst ? [...completed, ...notCompleted] : [...notCompleted, ...completed];
+  }
+  sortByCreationDate(isAscending?: boolean): Task[] {
+    return isAscending
+      ? this._tasks.toSorted((a, b) => a.creationDate - b.creationDate)
+      : this._tasks.toSorted((a, b) => b.creationDate - a.creationDate);
   }
 }
